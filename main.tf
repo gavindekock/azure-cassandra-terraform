@@ -65,14 +65,6 @@ resource "azurerm_subnet" "cassandra_subnet" {
   address_prefix       = "10.1.0.0/16"
 }
 
-resource "azurerm_public_ip" "cassandra_public_ips" {
-  count                        = "${var.vm_count}"
-  name                         = "${var.prefix}cassandra-public-ip-${count.index}"
-  location                     = "${var.azure_region}"
-  resource_group_name          = "${azurerm_resource_group.cassandra_rg.name}"
-  public_ip_address_allocation = "dynamic"
-}
-
 resource "azurerm_network_interface" "cassandra_nics" {
   count               = "${var.vm_count}"
   name                = "${var.prefix}cassandra-nic-${count.index}"
@@ -81,11 +73,68 @@ resource "azurerm_network_interface" "cassandra_nics" {
   network_security_group_id = "${azurerm_network_security_group.cassandra_nsg.id}"
 
   ip_configuration {
-    name                          = "${var.prefix}cassandra_ip_config-${count.index}"
+    name                          = "${var.prefix}cassandra-ip-config-${count.index}"
     subnet_id                     = "${azurerm_subnet.cassandra_subnet.id}"
     private_ip_address_allocation = "static"
     private_ip_address            = "10.1.0.${10 + count.index}"
-    public_ip_address_id          = "${element(azurerm_public_ip.cassandra_public_ips.*.id, count.index)}"
+  }
+}
+
+resource "azurerm_public_ip" "bastion_public_ip" {
+  name                         = "${var.prefix}bastion-public-ip"
+  location                     = "${var.azure_region}"
+  resource_group_name          = "${azurerm_resource_group.cassandra_rg.name}"
+  public_ip_address_allocation = "dynamic"
+}
+
+resource "azurerm_network_interface" "bastion_nic" {
+  name                = "${var.prefix}bastion-nic"
+  location            = "${var.azure_region}"
+  resource_group_name = "${azurerm_resource_group.cassandra_rg.name}"
+  network_security_group_id = "${azurerm_network_security_group.cassandra_nsg.id}"
+
+  ip_configuration {
+    name                          = "${var.prefix}cassandra-ip-config-${count.index}"
+    subnet_id                     = "${azurerm_subnet.cassandra_subnet.id}"
+    private_ip_address_allocation = "static"
+    private_ip_address            = "10.1.0.9"
+    public_ip_address_id          = "${azurerm_public_ip.bastion_public_ip.id}"
+  }
+}
+
+resource "azurerm_virtual_machine" "bastion_vm" {
+  name                  = "${var.prefix}cassandra-bastion"
+  location              = "${var.azure_region}"
+  resource_group_name   = "${azurerm_resource_group.cassandra_rg.name}"
+  network_interface_ids = ["${azurerm_network_interface.bastion_nic.id}"]
+  vm_size               = "Basic_A0"
+
+  # Uncomment this line to delete the OS disk automatically when deleting the VM
+  delete_os_disk_on_termination = true
+
+  os_profile {
+    computer_name  = "cassandra-bastion"
+    admin_username = "ops"
+    admin_password = "NOTSUPPORTED1234!"
+  }
+
+  os_profile_linux_config {
+    disable_password_authentication = true
+    ssh_keys = ["${var.ssh_keys}"]
+  }
+
+  storage_image_reference {
+    publisher = "Canonical"
+    offer     = "UbuntuServer"
+    sku       = "16.04-LTS"
+    version   = "latest"
+  }
+
+  storage_os_disk {
+    name              = "cassandra-bastion-os-disk-1"
+    caching           = "ReadWrite"
+    create_option     = "FromImage"
+    managed_disk_type = "Standard_LRS"
   }
 }
 
@@ -98,7 +147,6 @@ resource "azurerm_virtual_machine" "cassandra_vms" {
   network_interface_ids = ["${element(azurerm_network_interface.cassandra_nics.*.id, count.index)}"]
   vm_size               = "${var.vm_size}"
 
-  # Uncomment this line to delete the OS disk automatically when deleting the VM
   delete_os_disk_on_termination = true
 
   os_profile {
@@ -128,11 +176,12 @@ resource "azurerm_virtual_machine" "cassandra_vms" {
 }
 
 resource "null_resource" "install_cassandra" {
-    depends_on = ["azurerm_virtual_machine.cassandra_vms", "azurerm_public_ip.cassandra_public_ips"]
+    depends_on = ["azurerm_virtual_machine.cassandra_vms", "azurerm_public_ip.bastion_public_ip"]
     count = "${var.vm_count}"
 
     connection {
-        host  = "${element(azurerm_public_ip.cassandra_public_ips.*.ip_address, count.index)}"
+        bastion_host = "${azurerm_public_ip.bastion_public_ip.ip_address}"
+        host  = "10.1.0.${10 + count.index}"
         user  = "ops"
         private_key = "${file(var.private_key_path)}"
     }
