@@ -25,7 +25,7 @@ sudo sed -i "s/\/var\/lib\/cassandra\/data/\/mnt\/cassandra\/data/g" /etc/cassan
 sudo sed -i "s/\/var\/lib\/cassandra\/commitlog/\/mnt\/cassandra\/commitlog/g" /etc/cassandra/cassandra.yaml
 sudo sed -i "s/\/var\/lib\/cassandra\/saved_caches/\/mnt\/cassandra\/saved_caches/g" /etc/cassandra/cassandra.yaml
 sudo sed -i "s/seeds: \"127.0.0.1\"/seeds: \"10.1.0.10,10.1.0.11,10.1.0.12\"/g" /etc/cassandra/cassandra.yaml
-sudo sed -i "s/incremental_backups: false/incremental_backups: true/g" /etc/cassandra/cassandra.yaml
+#sudo sed -i "s/incremental_backups: false/incremental_backups: true/g" /etc/cassandra/cassandra.yaml
 sudo sed -i "s/listen_address: localhost/listen_address:/g" /etc/cassandra/cassandra.yaml
 sudo sed -i "s/rpc_address: localhost/rpc_address: 0.0.0.0/g" /etc/cassandra/cassandra.yaml
 sudo sed -i "s/endpoint_snitch: SimpleSnitch/endpoint_snitch: GossipingPropertyFileSnitch/g" /etc/cassandra/cassandra.yaml
